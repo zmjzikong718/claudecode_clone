@@ -1,0 +1,29 @@
+{
+  "name": "openclaw-mini",
+  "version": "0.1.0",
+  "description": "OpenClaw 核心架构的极简复现，用于学习 AI Agent 的系统级设计",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "openclaw-mini": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "chat": "tsx src/cli.ts chat",
+    "example": "tsx examples/basic.ts"
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "0.50.7",
+    "ts-node": "^10.9.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
