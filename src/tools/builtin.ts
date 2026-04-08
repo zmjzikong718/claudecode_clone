@@ -141,8 +141,70 @@ export const execTool:Tool<{command:string;timeout?:number}> = {
   },
   async execute(input,ctx){
     const timeout = input.timeout ?? 30000;//llm输入值或者30000默认值
-    try{
-      const child =spawn //使用spawn启动一个子进程
+    try{//使用 sh -c 执行命令（兼容性好）
+      const child = spawn("sh", ["-c", input.command], {
+        cwd: ctx.workspaceDir,
+        stdio:["ignore","pipe","pipe"],//捕获stdout和stderr
+      }); //使用spawn启动一个子进程,在当前项目目录下，启动一个 Shell 进程执行用户输入的命令，并忽略输入、通过管道捕获输出和错误信息。
+
+      //AbortSignal 杀进程，支持从外部中止执行中的命令
+      const onAbort = () => {
+        try {
+          child.kill();//向子进程发送终止信号
+        } catch { }//防止杀进程时出错,同时忽略错误，保证程序不崩溃
+      };
+      //检查是否已经取消
+      if (ctx.abortSignal?.aborted) {
+        onAbort()
+      } else if (ctx.abortSignal) {
+        ctx.abortSignal.addEventListener("abort", onAbort, {once:true});
+      }
+      //超时定时器
+      const timer = setTimeout(() => {
+        try { child.kill(); } catch { /* ignore */ }
+      }, timeout);
+       const MAX_OUTPUT_CHARS = 200_000;
+      let stdout = "";
+      let stderr = "";
+      let truncated = false;
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString();
+        if (stdout.length > MAX_OUTPUT_CHARS) {
+          stdout = stdout.slice(stdout.length - MAX_OUTPUT_CHARS);
+          truncated = true;
+        }
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+        if (stderr.length > MAX_OUTPUT_CHARS) {
+          stderr = stderr.slice(stderr.length - MAX_OUTPUT_CHARS);
+          truncated = true;
+        }
+      });
+
+      const exitCode = await new Promise<number | null>((resolve) => {
+        child.on("close", (code) => resolve(code));
+        child.on("error", () => resolve(null));
+      });
+
+      clearTimeout(timer);
+      ctx.abortSignal?.removeEventListener("abort", onAbort);
+
+      let result = stdout;
+      if (stderr) result += `\n[STDERR]\n${stderr}`;
+      if (exitCode !== null && exitCode !== 0) {
+        result += `\n[EXIT CODE] ${exitCode}`;
+      }
+      if (truncated) {
+        result += `\n[OUTPUT TRUNCATED: exceeded ${MAX_OUTPUT_CHARS} chars, kept tail]`;
+      }
+
+      return result.slice(0, 30000);
+    } catch (err) {
+      return `错误: ${(err as Error).message}`;
     }
-  }
-}
+  },
+};
+        
+         
+
